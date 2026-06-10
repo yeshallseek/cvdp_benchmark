@@ -47,3 +47,21 @@ DOCKER_TIMEOUT=900          # harness sims under CPU contention
 ```
 
 Round 3 = round-2 agent config + these timeouts.
+
+## Round 3: final results (full 92-datapoint run, valid)
+
+**Problem pass rate: 19/92 (20.7%)** — Easy 9/17 (52.9%), Medium 9/55 (16.4%), Hard 1/20 (5.0%).
+By category: cid003 32.4%, cid004 12.0%, cid005 7.4%, cid016 45.5%.
+Agent behavior: 48/88 self-submitted, 40 hit the 60-step limit, 2 hit the 3600s wall clock.
+
+Cross-checks:
+- On the 50 problems where v2 agents had completed under 600s: v2 20 passed, v3 16 passed —
+  same ballpark; differences are sampling noise at temperature 0.6.
+- On the 42 problems v2 had killed at 600s: v3 passed only 3 even with full time. Slow
+  problems are genuinely hard ones; the 600s timeout was mostly truncating runs that would
+  have failed anyway, not masking capability.
+- Round 1's 55% (11/20) sample was alphabetically-early datapoints (selection bias toward
+  easy ciphers/shifters), not representative.
+
+Headline: **Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4 (self-hosted, RTX 5090) scores
+~21% pass@1 on CVDP v1.1.0 agentic code generation (non-commercial) with mini-swe-agent.**
