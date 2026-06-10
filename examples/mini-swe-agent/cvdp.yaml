@@ -30,6 +30,7 @@ agent:
     3. Implement the requested changes in the project files.
     4. Verify your work compiles, e.g. `iverilog -g2012 -o /tmp/a.out <files>` or
        `verilator --lint-only -sv <files>`, and iterate until clean.
+       Before submitting, recompile every file you changed one final time.
     5. Submit your changes and finish your work by issuing the following command:
        `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
        Do not combine it with any other command.
@@ -51,10 +52,20 @@ agent:
 
     **CRITICAL REQUIREMENTS:**
 
-    - Your response MUST include AT LEAST ONE bash tool call
+    - EVERY response MUST include EXACTLY ONE bash tool call. A response without a tool
+      call is an error and wastes one of your limited steps.
     - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
     - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...`
     - Long-running commands time out; keep individual commands focused.
+    - If the same error appears twice in a row, or a file looks unchanged after an edit,
+      DO NOT repeat the same command. Change strategy: print the exact offending line
+      (`nl -ba file | sed -n 'N,Mp'`), or rewrite the whole file with a heredoc.
+    - When creating a file longer than ~120 lines, write it in two or more parts
+      (create the first part with `cat <<'EOF' > file`, then append with `cat <<'EOF' >> file`)
+      so the output limit cannot silently truncate it. After writing any file, verify the
+      tail with `tail -5 file`.
+    - Keep scratch testbenches and experiments in /code/rundir, not in rtl/ or verif/,
+      and do not leave .bak or backup copies in project directories.
 
     <system_information>
     {{system}} {{release}} {{version}} {{machine}}
@@ -87,7 +98,7 @@ agent:
     # View specific lines with numbers
     nl -ba filename.sv | sed -n '10,20p'
     ```
-  step_limit: 40
+  step_limit: 60
   cost_limit: 0
   wall_time_limit_seconds: 0
 environment:
@@ -101,23 +112,27 @@ environment:
     TQDM_DISABLE: '1'
 model:
   cost_tracking: ignore_errors
+  # Raw-text observations: do NOT use the |tojson filter here. Jinja's tojson
+  # HTML-escapes < > & into \uXXXX sequences, which mangles Verilog operators
+  # (<<, <=, >>) when the model inspects files and breaks its sed patterns.
   observation_template: |
-    {%- if output.output | length < 10000 -%}
-    {
-      "returncode": {{ output.returncode }},
-      "output": {{ output.output | tojson }}
-      {%- if output.exception_info %}, "exception_info": {{ output.exception_info | tojson }}{% endif %}
-    }
-    {%- else -%}
-    {
-      "returncode": {{ output.returncode }},
-      "output_head": {{ output.output[:5000] | tojson }},
-      "output_tail": {{ output.output[-5000:] | tojson }},
-      "elided_chars": {{ output.output | length - 10000 }},
-      "warning": "Output too long."
-      {%- if output.exception_info %}, "exception_info": {{ output.exception_info | tojson }}{% endif %}
-    }
-    {%- endif -%}
+    <returncode>{{ output.returncode }}</returncode>
+    {%- if output.exception_info %}
+    <exception>{{ output.exception_info }}</exception>
+    {%- endif %}
+    {%- if output.output | length < 10000 %}
+    <output>
+    {{ output.output }}
+    </output>
+    {%- else %}
+    <output_head>
+    {{ output.output[:5000] }}
+    </output_head>
+    ... ({{ output.output | length - 10000 }} characters elided: output too long) ...
+    <output_tail>
+    {{ output.output[-5000:] }}
+    </output_tail>
+    {%- endif %}
   format_error_template: |
     Tool call error:
 
@@ -138,5 +153,5 @@ model:
     drop_params: true
     temperature: 0.6
     top_p: 0.95
-    max_tokens: 8192
+    max_tokens: 16384
     timeout: 600
