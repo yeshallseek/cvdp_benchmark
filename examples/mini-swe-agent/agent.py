@@ -12,19 +12,22 @@ self-hosted vLLM server on the Docker host).
 
 Configuration (environment variables):
   MSWEA_MODEL_NAME   LiteLLM model name.
-                     Default: hosted_vllm/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4
+                     Default: hosted_vllm/RedHatAI/diffusiongemma-26B-A4B-it-NVFP4
   MSWEA_API_BASE     OpenAI-compatible base URL. Default: http://<docker-host-gateway>:8000/v1
   MSWEA_API_KEY      API key for the endpoint. Default: local-key
-  MSWEA_STEP_LIMIT   Maximum number of model calls. Default: 40
+  MSWEA_STEP_LIMIT   Maximum number of model calls. Default: 60
   MSWEA_ENV_TIMEOUT  Per-command timeout in seconds. Default: 300
   MSWEA_CONFIG_PATH  Path to the YAML config. Default: /app/cvdp.yaml
 """
 
+from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
 import socket
 import struct
 import sys
+import time
 import traceback
 
 # The benchmark runs this container with --user $UID:$GID, so $HOME from the
@@ -37,7 +40,7 @@ os.environ.setdefault("MSWEA_COST_TRACKING", "ignore_errors")
 
 import yaml
 
-DEFAULT_MODEL = "hosted_vllm/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4"
+DEFAULT_MODEL = "hosted_vllm/RedHatAI/diffusiongemma-26B-A4B-it-NVFP4"
 CONFIG_PATH = os.environ.get("MSWEA_CONFIG_PATH", "/app/cvdp.yaml")
 TRAJECTORY_DIR_CANDIDATES = ["/code/rundir", "/tmp"]
 
@@ -71,11 +74,20 @@ def _resolve_api_base():
     return f"http://{gateway}:8000/v1"
 
 
-def _trajectory_path():
+def _artifact_path(filename):
     for candidate in TRAJECTORY_DIR_CANDIDATES:
         if os.path.isdir(candidate) and os.access(candidate, os.W_OK):
-            return os.path.join(candidate, "mini_swe_agent_trajectory.json")
+            return os.path.join(candidate, filename)
     return None
+
+
+def _write_metrics(path, metrics):
+    if not path:
+        return
+    try:
+        Path(path).write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"Warning: could not write agent metrics to {path}: {exc}", file=sys.stderr)
 
 
 def main():
@@ -108,7 +120,8 @@ def main():
     agent_config = config.get("agent", {})
     if os.environ.get("MSWEA_STEP_LIMIT"):
         agent_config["step_limit"] = int(os.environ["MSWEA_STEP_LIMIT"])
-    trajectory = _trajectory_path()
+    trajectory = _artifact_path("mini_swe_agent_trajectory.json")
+    metrics_path = _artifact_path("mini_swe_agent_metrics.json")
     if trajectory:
         agent_config["output_path"] = trajectory
 
@@ -120,6 +133,7 @@ def main():
     print(f"API base:    {api_base}")
     print(f"Step limit:  {agent_config.get('step_limit')}")
     print(f"Trajectory:  {trajectory}")
+    print(f"Metrics:     {metrics_path}")
     print(f"Task length: {len(task)} characters")
     sys.stdout.flush()
 
@@ -134,15 +148,42 @@ def main():
     )
 
     exit_status = "Error"
+    exception_type = None
+    exception_message = None
+    started_at = datetime.now(timezone.utc)
+    started = time.perf_counter()
     try:
         exit_info = agent.run(task)
         exit_status = exit_info.get("exit_status", "")
-    except Exception:
+    except Exception as exc:
+        exception_type = type(exc).__name__
+        exception_message = str(exc)
         # Keep partial work: the harness evaluates whatever was changed.
         print("Agent terminated with an exception:", file=sys.stderr)
         traceback.print_exc()
+    finally:
+        finished_at = datetime.now(timezone.utc)
+        duration_seconds = time.perf_counter() - started
+        metrics = {
+            "schema_version": 1,
+            "started_at_utc": started_at.isoformat(),
+            "finished_at_utc": finished_at.isoformat(),
+            "duration_seconds": round(duration_seconds, 6),
+            "model_name": model_config["model_name"],
+            "api_base": api_base,
+            "step_limit": agent_config.get("step_limit"),
+            "exit_status": exit_status,
+            "model_calls": agent.n_calls,
+            "exception_type": exception_type,
+            "exception_message": exception_message,
+        }
+        _write_metrics(metrics_path, metrics)
 
-    print(f"Agent finished: exit_status={exit_status} model_calls={agent.n_calls}")
+    print(
+        "Agent finished: "
+        f"exit_status={exit_status} model_calls={agent.n_calls} "
+        f"duration_seconds={duration_seconds:.3f}"
+    )
     sys.exit(0)
 
 

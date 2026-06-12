@@ -111,6 +111,7 @@ environment:
     PIP_PROGRESS_BAR: 'off'
     TQDM_DISABLE: '1'
 model:
+  model_name: hosted_vllm/RedHatAI/diffusiongemma-26B-A4B-it-NVFP4
   cost_tracking: ignore_errors
   # Raw-text observations: do NOT use the |tojson filter here. Jinja's tojson
   # HTML-escapes < > & into \uXXXX sequences, which mangles Verilog operators
@@ -151,6 +152,7 @@ model:
     without any other command.
   model_kwargs:
     drop_params: true
+    tool_choice: required
     temperature: 0.6
     top_p: 0.95
     max_tokens: 16384

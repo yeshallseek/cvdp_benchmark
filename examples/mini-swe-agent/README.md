@@ -22,29 +22,24 @@ docker build -f docker/Dockerfile.sim -t nvidia/cvdp-sim:v1.0.0 .
 ./examples/mini-swe-agent/build_agent.sh           # -> cvdp-mini-swe-agent
 ```
 
-## Serve a model
+## Serve DiffusionGemma
 
-Any OpenAI-compatible endpoint reachable from the Docker host works. Example with vLLM:
+The benchmark branch includes a GPU-only vLLM launcher configured for DiffusionGemma's
+maximum 256K-token context, FP8 KV cache, Gemma 4 tool parsing, and one active sequence:
 
 ```bash
-vllm serve nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4 \
-  --host 0.0.0.0 --port 8000 \
-  --reasoning-parser nemotron_v3 \
-  --enable-auto-tool-choice --tool-call-parser qwen3_coder
+./scripts/launch_diffusiongemma_benchmark_vllm.sh
 ```
 
 By default the agent auto-detects the Docker host (the container's default gateway) and
 targets `http://<gateway>:8000/v1`, so a server listening on `0.0.0.0:8000` on the host
-needs no extra configuration. The endpoint must support native (OpenAI-style) tool calls.
+needs no extra configuration.
 
 ## Run the benchmark
 
 ```bash
 # Forward agent configuration env vars into the agent container (optional, defaults shown below)
-export CVDP_AGENT_ENV=MSWEA_MODEL_NAME,MSWEA_API_BASE,MSWEA_API_KEY,MSWEA_STEP_LIMIT,MSWEA_ENV_TIMEOUT
-
-python run_benchmark.py -f cvdp_v1.1.0_agentic_code_generation_no_commercial.jsonl \
-  -l -g cvdp-mini-swe-agent
+./scripts/run_diffusiongemma_pilot.sh
 
 # Or multi-sample pass@k:
 python run_samples.py -f dataset.jsonl -l -g cvdp-mini-swe-agent -n 5 -k 1
@@ -54,10 +49,10 @@ python run_samples.py -f dataset.jsonl -l -g cvdp-mini-swe-agent -n 5 -k 1
 
 | Variable | Default | Description |
 |---|---|---|
-| `MSWEA_MODEL_NAME` | `hosted_vllm/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | LiteLLM model name (`hosted_vllm/` prefix for vLLM) |
+| `MSWEA_MODEL_NAME` | `hosted_vllm/RedHatAI/diffusiongemma-26B-A4B-it-NVFP4` | LiteLLM model name (`hosted_vllm/` prefix for vLLM) |
 | `MSWEA_API_BASE` | `http://<docker-host-gateway>:8000/v1` | OpenAI-compatible base URL |
 | `MSWEA_API_KEY` | `local-key` | API key sent to the endpoint |
-| `MSWEA_STEP_LIMIT` | `40` | Max model calls per datapoint |
+| `MSWEA_STEP_LIMIT` | `60` | Max model calls per datapoint |
 | `MSWEA_ENV_TIMEOUT` | `300` | Per-command timeout (seconds) |
 | `MSWEA_CONFIG_PATH` | `/app/cvdp.yaml` | Agent/model/environment YAML config |
 
@@ -67,4 +62,6 @@ observation truncation policy live in [`cvdp.yaml`](cvdp.yaml).
 ## Debugging
 
 Each run writes the full trajectory to `<work>/…/rundir/mini_swe_agent_trajectory.json`
-(messages, tool calls, outputs), which is ignored by the harness's change tracking.
+(messages, tool calls, outputs) and timing data to
+`<work>/…/rundir/mini_swe_agent_metrics.json`. Both are ignored by the harness's change
+tracking.
