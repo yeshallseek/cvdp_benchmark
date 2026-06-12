@@ -27,3 +27,17 @@ Generated benchmark artifacts remain local and ignored under
 `work_diffusiongemma_pilot10/`. The result report records their hashes and summary so the
 completed run can be identified without committing trajectories, patches, logs, or copied
 benchmark repositories.
+
+## DiffusionGemma full CVDP evaluation
+
+- Approved: 2026-06-12
+- Scope: all 92 non-commercial agentic tasks
+- Plan: `experiments/diffusiongemma-mini-swe/full-eval-plan.md`
+- Runner: `scripts/run_diffusiongemma_full.sh`
+- Local output: `work_diffusiongemma_full92/`
+
+The full runner is resumable and preserves a separate console log for every task:
+
+```bash
+./scripts/run_diffusiongemma_full.sh
+```

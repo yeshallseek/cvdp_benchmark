@@ -41,6 +41,9 @@ needs no extra configuration.
 # Forward agent configuration env vars into the agent container (optional, defaults shown below)
 ./scripts/run_diffusiongemma_pilot.sh
 
+# After reviewing the pilot, run all 92 tasks with per-task resume support:
+./scripts/run_diffusiongemma_full.sh
+
 # Or multi-sample pass@k:
 python run_samples.py -f dataset.jsonl -l -g cvdp-mini-swe-agent -n 5 -k 1
 ```
