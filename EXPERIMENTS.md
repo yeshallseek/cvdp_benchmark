@@ -30,8 +30,13 @@ benchmark repositories.
 
 ## DiffusionGemma full CVDP evaluation
 
-- Approved: 2026-06-12
+- Completed: 2026-06-12
 - Scope: all 92 non-commercial agentic tasks
+- Result: 25/92 passed (27.2%)
+- Nemotron baseline: 19/92 passed (20.7%)
+- Wall time: 12h 4m 33s
+- Full report: `experiments/diffusiongemma-mini-swe/full-results.md`
+- Per-task comparison: `experiments/diffusiongemma-mini-swe/full-task-comparison.csv`
 - Plan: `experiments/diffusiongemma-mini-swe/full-eval-plan.md`
 - Runner: `scripts/run_diffusiongemma_full.sh`
 - Local output: `work_diffusiongemma_full92/`
